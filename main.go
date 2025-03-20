@@ -1,42 +1,38 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"log"
 	"os"
 
-	"github.com/hexops/gotextdiff"
-	"github.com/hexops/gotextdiff/myers"
-	"github.com/hexops/gotextdiff/span"
+	"github.com/gitleaks/go-gitdiff/gitdiff"
 )
 
-func main() { // Read the contents of the two files.
-	file1Path := "a.txt"
-	file2Path := "b.txt"
-
-	file1Bytes, err := os.ReadFile(file1Path)
+func main() {
+	patch, err := os.Open("changes.patch")
 	if err != nil {
-		fmt.Printf("Error reading file1: %v\n", err)
-		return
-	}
-	file2Bytes, err := os.ReadFile(file2Path)
-	if err != nil {
-		fmt.Printf("Error reading file2: %v\n", err)
-		return
+		log.Fatal(err)
 	}
 
-	file1 := string(file1Bytes)
-	file2 := string(file2Bytes)
+	// files is a slice of *gitdiff.File describing the files changed in the patch
+	// preamble is a string of the content of the patch before the first file
+	files, err := gitdiff.Parse(patch)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	// Generate the diff.
-	diff := myers.ComputeEdits(span.URIFromPath(file1Path), file1, file2)
-	fmt.Print(diff)
+	code, err := os.Open("a.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+	file := <-files
 
-	// Print the diff.
-	fmt.Println(fmt.Sprint(gotextdiff.ToUnified(file1Path, file2Path, file1, diff)))
+	// apply the changes in the patch to a source file
+	var output bytes.Buffer
+	if err := gitdiff.Apply(&output, code, file); err != nil {
+		log.Fatal(err)
+	}
 
-	// Apply the diff to file1.
-	applied := gotextdiff.ApplyEdits(file1, diff)
-
-	// Print the result.
-	fmt.Println(applied)
+	fmt.Println(output.String())
 }
