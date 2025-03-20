@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"log"
@@ -10,29 +11,56 @@ import (
 )
 
 func main() {
-	patch, err := os.Open("changes.patch")
+	// open original file
+	originalFile, err := os.Open("a.txt")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// files is a slice of *gitdiff.File describing the files changed in the patch
-	// preamble is a string of the content of the patch before the first file
-	files, err := gitdiff.Parse(patch)
+	// read patch
+	patchFile, err := os.Open("changes.patch")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	code, err := os.Open("a.txt")
+	// parse patch
+	patchChan, err := gitdiff.Parse(patchFile)
 	if err != nil {
 		log.Fatal(err)
 	}
-	file := <-files
 
-	// apply the changes in the patch to a source file
+	// get patch from channel
+	patch := <-patchChan
+
+	// apply diff
 	var output bytes.Buffer
-	if err := gitdiff.Apply(&output, code, file); err != nil {
+	if err := gitdiff.Apply(&output, originalFile, patch); err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println(output.String())
+	// create new file
+	modifiedFile, err := os.Create("b.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer modifiedFile.Close()
+
+	// write to new file
+	_, err = output.WriteTo(modifiedFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// open new file
+	openedModifiedFile, err := os.Open("b.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// read and print new file content
+	scanner := bufio.NewScanner(openedModifiedFile)
+	for scanner.Scan() {
+		fmt.Println(scanner.Text())
+	}
+
 }
